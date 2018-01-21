@@ -59,7 +59,7 @@ def CtoF ( Tc ):
 def get_values():
     """
     Read the sensors available and their values  
-    Returns a list of dictionaries with the sensor list
+    Returns a dictionary with the readings or None on errors
     """
     sensor_list = []
     try :
