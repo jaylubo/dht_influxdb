@@ -4,6 +4,8 @@ After=multi-user.target
 
 [Service]
 Type=idle
+Restart=always
+RestartSec=3
 ExecStart=/usr/bin/python /usr/local/bin/dht.py --tags='location=upstairs,version=1' --influx_server=192.168.5.20
 
 [Install]
