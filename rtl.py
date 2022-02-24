@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 """ Send LaCrosse Temperature Sensor Data (via software defined radio) to influxdb """
 
 # Copyright (c) 2019  Jay Lubomirski
@@ -55,14 +55,14 @@ def get_values():
     Returns a dictionary with the readings or None on errors
     """
 
-    command_line = ["rtl_433", "-d", "rtl_tcp:192.168.5.18", "-f", "434078700", "-R", "34", "-F", "json"]
+    command_line = ["rtl_433", "-d", "rtl_tcp:192.168.5.20", "-T", "300", "-f", "434078700", "-R", "34", "-F", "json"]
     #command_line = ["cat", "values.txt"]
     humidity = 0
     temperatureC = 0
     foundH = 0
     foundT = 0
     
-    p = subprocess.Popen(command_line, stdout=subprocess.PIPE)
+    p = subprocess.Popen(command_line, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     while foundH == 0 or foundT == 0:
         output = p.stdout.readline()
         if output == '' and p.poll() is not None:
@@ -102,7 +102,7 @@ def do_weather_reading( influxclient, timestamp, tags ):
     if readings == None:
         return
     
-    print "Temp: {0}C {1}F, RH: {2}%, Dewpoint: {3}C {4}F".format( readings['tempC'], readings['tempF'], readings['rh'], readings['dewC'], readings['dewF'])
+    print ("Temp: {0}C {1}F, RH: {2}%, Dewpoint: {3}C {4}F".format( readings['tempC'], readings['tempF'], readings['rh'], readings['dewC'], readings['dewF']))
 
     series = []
     for measurement in ['temperature', 'humidity', 'dewpoint']:
@@ -144,7 +144,7 @@ class rtl:
         if reading == None:
             return
     
-        print "Water: {0} HCC ".format( reading )
+        print ("Water: {0} HCC ".format( reading ))
 
         series = []
         fields = {}
@@ -172,7 +172,7 @@ class rtl:
         series = []
         
         if "gas" in readings:
-            print "Gas: {0} CCF ".format( readings["gas"] )
+            print ("Gas: {0} CCF ".format( readings["gas"] ))
 
             fields = {}
             fields["reading"] = readings["gas"]
@@ -188,7 +188,7 @@ class rtl:
             }
             series.append(d)
         if "electric" in readings:
-            print "Electric: {0} KWH ".format( readings["electric"] )
+            print ("Electric: {0} KWH ".format( readings["electric"] ))
 
             fields = {}
             fields["reading"] = readings["electric"]
@@ -221,14 +221,14 @@ class rtl:
 
         command_line = ["rtlamr", "-format", "json", "-msgtype", msgtype,
                         "-server", server, "-filterid", ids, "-single", "true"]
-        print " ".join(command_line)
+        print (" ".join(command_line))
         found = 0
         result = []
 
-        p = subprocess.Popen(command_line, stdout=subprocess.PIPE)
+        p = subprocess.Popen(command_line, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         while found < len(filterids):
             output = p.stdout.readline()
-            print output
+            print (output)
             if output == '' and p.poll() is not None:
                 break
             if output:
@@ -266,18 +266,24 @@ class rtl:
     
     def __get_gas_and_electric_reading( self, gas_meter_id=None, electric_meter_id=None ):
         " internal call: return dictionary with electric/gas readings "
-        ids = []
+        gas_ids = []
+        elec_ids = []
         if gas_meter_id:
-            ids.append(str(gas_meter_id))
+            gas_ids.append(str(gas_meter_id))
         if electric_meter_id:
-            ids.append(str(electric_meter_id))
-        if len(ids) == 0:
+            elec_ids.append(str(electric_meter_id))
+        if (len(gas_ids) + len(elec_ids)) == 0:
             return {}
-        l = self.get_rtl_values( "scm", ids )
 
+        if (len(elec_ids)>0):
+            le = self.get_rtl_values( "scm", elec_ids )
+        if (len(gas_ids) > 0):
+            lg = self.get_rtl_values( "scm+", gas_ids )
+        l = le + lg
+        
         d = {}
         for item in l:
-            if gas_meter_id and str(item["Message"]["ID"]) == str(gas_meter_id):
+            if gas_meter_id and "EndpointID" in item["Message"] and str(item["Message"]["EndpointID"]) == str(gas_meter_id):
                 try:
                     raw = item["Message"]["Consumption"]
                     ccf = float(raw)/100.0
@@ -286,7 +292,7 @@ class rtl:
                     print ("Parse error, gas reading:", repr(d))
                 except ValueError as e:
                     print ("Parse error, gas reading:", repr(d))
-            elif electric_meter_id and str(item["Message"]["ID"]) == str(electric_meter_id):
+            elif electric_meter_id and "ID" in item["Message"] and str(item["Message"]["ID"]) == str(electric_meter_id):
                 try:
                     raw = item["Message"]["Consumption"]
                     kwh = float(raw)/100.0
@@ -345,12 +351,12 @@ if __name__ == "__main__" :
         r = rtl(args.rtl_server_ip, args.rtl_server_port, args.electric_id, args.gas_id, args.water_id)
 
         if args.meter_db:
-            print "Connecting to {0}:{1} and writing to database {2}".format(args.server, args.port, args.meter_db)
+            print ("Connecting to {0}:{1} and writing to database {2}".format(args.server, args.port, args.meter_db))
             meter_client = InfluxDBClient(host=args.server, port=args.port, database=args.meter_db)    
 
-    weather_client = None
-    print "Connecting to {0}:{1} and writing to database {2}".format(args.server, args.port, args.db)
-    weather_client = InfluxDBClient(host=args.server, port=args.port, database=args.db)
+#    weather_client = None
+#    print ("Connecting to {0}:{1} and writing to database {2}".format(args.server, args.port, args.db))
+#    weather_client = InfluxDBClient(host=args.server, port=args.port, database=args.db)
     
     tags = {'hostname': hostname}
     if args.tags:
@@ -358,14 +364,14 @@ if __name__ == "__main__" :
         for s in splits:
             tag_split = s.split('=')
             tags[tag_split[0]]=tag_split[1]
-        print "Found tags: {0}".format(repr(tags))
+        print ("Found tags: {0}".format(repr(tags)))
 
     beat = 0 
     while True:
         t1 = datetime.utcnow()
         stamp = t1.isoformat()
 
-        do_weather_reading(weather_client, stamp, tags )
+#        do_weather_reading(weather_client, stamp, tags )
 
         if r:
             r.do_gas_electric_meter_reading(meter_client, stamp, {'hostname': hostname} )
@@ -379,7 +385,7 @@ if __name__ == "__main__" :
             sleeptime = 0
         else:
             sleeptime -= td.total_seconds()
-        print "Readings took {} seconds, sleeping {} seconds".format(td.total_seconds(), sleeptime)
+        print ("Readings took {} seconds, sleeping {} seconds".format(td.total_seconds(), sleeptime))
         time.sleep(sleeptime)
         beat += 1
         
