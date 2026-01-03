@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """ Send DHT Temperature Sensor data to influxdb """
 
 # Copyright (c) 2018  Jay Lubomirski
@@ -27,7 +26,7 @@ import socket
 import sys
 import argparse
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 from influxdb import InfluxDBClient
 
@@ -59,7 +58,7 @@ def CtoF ( Tc ):
 def get_values():
     """
     Read the sensors available and their values  
-    Returns a dictionary with the readings or None on errors
+    Returns a list of dictionaries with the sensor list
     """
     sensor_list = []
     try :
@@ -75,8 +74,8 @@ def get_values():
     d['tempC'] = temperatureC
     d['tempF'] = temperatureF
     d['rh'] = humidity
-    d['dewC'] = dewpointC
-    d['dewF'] = dewpointF
+    d['dewC'] = float(dewpointC)
+    d['dewF'] = float(dewpointF)
     
     return d
 
@@ -94,7 +93,7 @@ if __name__ == "__main__" :
 
     args = parser.parse_args()
 
-    print "Connecting to {0}:{1} and writing to database {2}".format(args.server, args.port, args.db)
+    print (f"Connecting to {args.server}:{args.port} and writing to database {args.db}")
     client = InfluxDBClient(host=args.server, port=args.port, database=args.db)
 
     tags = {'hostname': hostname}
@@ -103,16 +102,16 @@ if __name__ == "__main__" :
         for s in splits:
             tag_split = s.split('=')
             tags[tag_split[0]]=tag_split[1]
-        print "Found tags: {0}".format(repr(tags))
+        print (f"Found tags: {repr(tags)}")
     
     while True:
-        stamp = datetime.utcnow().isoformat()
+        stamp = datetime.now(timezone.utc).isoformat()
 
         readings = get_values()
         if readings == None:
             sys.exit(-1);
 
-        print "Temp: {0}C {1}F, RH: {2}%, Dewpoint: {3}C {4}F".format( readings['tempC'], readings['tempF'], readings['rh'], readings['dewC'], readings['dewF'])
+        print (f"Temp: {readings['tempC']}C {readings['tempF']}F, RH: {readings['rh']}%, Dewpoint: {readings['dewC']}C {readings['dewF']}F")
 
         series = []
         for measurement in ['temperature', 'humidity', 'dewpoint']:
@@ -133,7 +132,7 @@ if __name__ == "__main__" :
                   }
             series.append(d)
 
-        print repr(series)
+        print (repr(series))
         client.write_points(series)
         time.sleep(int(args.interval)*60)
 

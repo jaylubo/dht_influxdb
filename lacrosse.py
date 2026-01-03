@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 """ Send LaCrosse Temperature Sensor Data (via software defined radio) to influxdb """
 
 # Copyright (c) 2019  Jay Lubomirski
@@ -54,7 +54,7 @@ def get_values():
     Returns a dictionary with the readings or None on errors
     """
 
-    command_line = ["rtl_433", "-f", "434078700", "-R", "34", "-F", "json"]
+    command_line = ["rtl_433", "-T", "300", "-f", "434078700", "-R", "34", "-F", "json"]
     #command_line = ["cat", "values.txt"]
     humidity = 0
     temperatureC = 0
@@ -80,6 +80,7 @@ def get_values():
     else:
         p.kill()
     
+    if foundH == 1 and foundT == 1:
         dewpointC = dewpoint ( temperatureC, humidity )
         temperatureF = CtoF(temperatureC)
         dewpointF = CtoF(dewpointC)
@@ -109,7 +110,7 @@ if __name__ == "__main__" :
 
     args = parser.parse_args()
 
-    print "Connecting to {0}:{1} and writing to database {2}".format(args.server, args.port, args.db)
+    print ("Connecting to {0}:{1} and writing to database {2}".format(args.server, args.port, args.db))
     client = InfluxDBClient(host=args.server, port=args.port, database=args.db)
 
     tags = {'hostname': hostname}
@@ -118,7 +119,7 @@ if __name__ == "__main__" :
         for s in splits:
             tag_split = s.split('=')
             tags[tag_split[0]]=tag_split[1]
-        print "Found tags: {0}".format(repr(tags))
+        print ("Found tags: {0}".format(repr(tags)))
     
     while True:
         stamp = datetime.utcnow().isoformat()
@@ -128,7 +129,7 @@ if __name__ == "__main__" :
             time.sleep(int(args.interval)*60)
             continue
 
-        print "Temp: {0}C {1}F, RH: {2}%, Dewpoint: {3}C {4}F".format( readings['tempC'], readings['tempF'], readings['rh'], readings['dewC'], readings['dewF'])
+        print ("Temp: {0}C {1}F, RH: {2}%, Dewpoint: {3}C {4}F".format( readings['tempC'], readings['tempF'], readings['rh'], readings['dewC'], readings['dewF']))
 
         series = []
         for measurement in ['temperature', 'humidity', 'dewpoint']:
@@ -149,7 +150,7 @@ if __name__ == "__main__" :
                   }
             series.append(d)
 
-        print repr(series)
+        print (repr(series))
         client.write_points(series)
         time.sleep(int(args.interval)*60)
 
